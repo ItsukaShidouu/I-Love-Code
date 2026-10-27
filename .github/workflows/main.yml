@@ -1,4 +1,3 @@
-
 name: Machine Learning
 
 on:
@@ -9,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: update-readme
@@ -17,19 +16,14 @@ concurrency:
 
 jobs:
   update-readme:
-    # Mencegah workflow berulang akibat commit timestamp sendiri.
-    if: >-
-      github.event_name != 'push' ||
-      !contains(github.event.head_commit.message, '[auto-readme-timestamp]')
-
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          ref: main
           token: ${{ secrets.GH_PAT }}
           fetch-depth: 1
 
@@ -38,59 +32,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ ! -f README.md ]; then
-            echo "README.md tidak ditemukan."
-            exit 1
-          fi
-
           TIMESTAMP=$(TZ=Asia/Jakarta date '+%Y-%m-%d %H:%M:%S WIB')
-          MARKER="<!-- AUTO-UPDATE-TIMESTAMP -->"
-          END_MARKER="<!-- END-AUTO-UPDATE-TIMESTAMP -->"
 
-          if ! grep -Fq "$MARKER" README.md; then
-            printf '\n## Aktivitas Terakhir\n\n%s\n%s\n' \
-              "$MARKER" "$END_MARKER" >> README.md
-          fi
+          # Hapus seluruh isi README dan tulis satu baris timestamp.
+          printf '%s\n' "$TIMESTAMP" > README.md
 
-          python3 - "$TIMESTAMP" "$MARKER" "$END_MARKER" <<'PY'
-          import sys
-          from pathlib import Path
+          echo "README.md diperbarui: $TIMESTAMP"
 
-          timestamp, marker, end_marker = sys.argv[1:]
-          path = Path("README.md")
-          content = path.read_text(encoding="utf-8")
+      - name: Wait 5 seconds
+        run: sleep 5
 
-          start = content.find(marker)
-          if start == -1:
-              raise SystemExit("Marker awal tidak ditemukan")
-
-          end = content.find(end_marker, start + len(marker))
-          if end == -1:
-              raise SystemExit("Marker akhir tidak ditemukan")
-
-          replacement = (
-              f"{marker}\n\n"
-              f"Terakhir diperbarui: {timestamp}\n"
-              f"{end_marker}"
-          )
-
-          updated = (
-              content[:start]
-              + replacement
-              + content[end + len(end_marker):]
-          )
-
-          path.write_text(updated, encoding="utf-8")
-          PY
-
-      - name: Commit and push as my GitHub account
+      - name: Commit and push
         shell: bash
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           set -euo pipefail
 
-          # Ganti dengan username dan email GitHub milikmu.
           git config user.name "ItsukaShidouu"
           git config user.email "itsukashidoouu@gmail.com"
 
@@ -100,9 +58,8 @@ jobs:
           fi
 
           git add README.md
-          git commit -m "chore: update README [auto-readme-timestamp]"
+          git commit -m "re: update"
 
-          # Push menggunakan PAT.
           git -c \
             http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_PAT" | base64 -w 0)" \
             push origin HEAD:main
