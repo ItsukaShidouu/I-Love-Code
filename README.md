@@ -1,6 +1,4 @@
- 
-
-## Aktivitas Terakhir
+ ## Aktivitas Terakhir
 
 <!-- AUTO-UPDATE-TIMESTAMP -->
 
