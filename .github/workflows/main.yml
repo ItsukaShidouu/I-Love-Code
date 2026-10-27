@@ -1,10 +1,10 @@
-
-name: Auto Update README Jakarta Time
+name: Machine Learning
 
 on:
-  schedule:
-    # Setiap 5 menit (UTC)
-    - cron: "*/5 * * * *"
+  push:
+    branches:
+      - main
+
   workflow_dispatch:
 
 permissions:
@@ -16,8 +16,11 @@ concurrency:
 
 jobs:
   update-readme:
+    # Mencegah loop dari commit bot sendiri.
+    if: github.event_name != 'push' || github.actor != 'github-actions[bot]'
+
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
 
     steps:
       - name: Checkout repository
@@ -31,12 +34,17 @@ jobs:
         run: |
           set -euo pipefail
 
+          if [ ! -f README.md ]; then
+            echo "README.md tidak ditemukan."
+            exit 1
+          fi
+
           TIMESTAMP=$(TZ=Asia/Jakarta date '+%Y-%m-%d %H:%M:%S WIB')
           MARKER="<!-- AUTO-UPDATE-TIMESTAMP -->"
           END_MARKER="<!-- END-AUTO-UPDATE-TIMESTAMP -->"
 
           if ! grep -Fq "$MARKER" README.md; then
-            printf '\n## Aktivitas Terakhir\n\n%s\n%s\n%s\n' \
+            printf '\n## Aktivitas Terakhir\n\n%s\n%s\n' \
               "$MARKER" "$END_MARKER" >> README.md
           fi
 
@@ -49,20 +57,31 @@ jobs:
           content = path.read_text(encoding="utf-8")
 
           start = content.find(marker)
+          if start == -1:
+              raise SystemExit("Marker awal tidak ditemukan")
+
           end = content.find(end_marker, start + len(marker))
+          if end == -1:
+              raise SystemExit("Marker akhir tidak ditemukan")
 
-          if start == -1 or end == -1:
-              raise SystemExit("Timestamp markers tidak valid")
+          replacement = (
+              f"{marker}\n\n"
+              f"Terakhir diperbarui: {timestamp}\n"
+              f"{end_marker}"
+          )
 
-          replacement = f"{marker}\n\nTerakhir diperbarui: {timestamp}\n{end_marker}"
-          content = content[:start] + replacement + content[end + len(end_marker):]
-          path.write_text(content, encoding="utf-8")
+          updated = content[:start] + replacement + content[end + len(end_marker):]
+          path.write_text(updated, encoding="utf-8")
           PY
 
-      - name: Commit and push changes
+      - name: Commit and push README
+        shell: bash
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
           if git diff --quiet -- README.md; then
             echo "README.md tidak berubah."
